@@ -3,10 +3,10 @@ apply plugin: 'kotlin'
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     compile "org.jetbrains.kotlinx:kotlinx-coroutines-android:0.21"
-    compile "com.github.kittinunf.result:result:$resultVersion"
+    compile 'io.arrow-kt:arrow-core:0.7.1'
 
     testImplementation "junit:junit:$jUnitVersion"
-    testImplementation "com.nhaarman:mockito-kotlin:$kotlin_mock_version"
+    testImplementation "io.mockk:mockk:$mockk_version"
     testImplementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 }
 
@@ -16,4 +16,3 @@ kotlin {
     }
 }
 
-//apply from: "$rootDir/build-support/jacoco.gradle"

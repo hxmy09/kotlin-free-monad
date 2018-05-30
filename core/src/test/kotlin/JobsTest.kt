@@ -1,10 +1,13 @@
-package bob.free
-import com.github.kittinunf.result.Result
-import com.nhaarman.mockito_kotlin.*
+import bob.free.*
+import io.mockk.called
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.experimental.Unconfined
 import kotlinx.coroutines.experimental.android.UI
+import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -17,42 +20,45 @@ class JobsTest {
 
     @Test
     fun cancel() {
-        val i: Interpreter = mock()
-        val f: (String) -> String = mock()
-        whenever(i.eval<String>(any())).then { Thread.sleep(1000L); f }
-        CoroutinesExpressionJob(i, mock<Expression<String>>()).cancel()
-        verifyZeroInteractions(f)
+        val i: Interpreter = mockk(relaxed = true)
+        val f: (String) -> String = mockk(relaxed = true)
+        every { (i.eval<String>(any())) } answers { Result { Thread.sleep(100L); f("") } }
+        CoroutinesExpressionJob(i, mockk<Expression<String>>(relaxed = true)).let {
+            it.cancel()
+            runBlocking(CoroutinesExpressionJob.defaultDispatcher) { delay(100L) }
+            verify { f wasNot called }
+        }
     }
 
     @Test
     fun await() {
-        val i: Interpreter = mock()
-        val exp: Expression<String> = mock()
-        whenever(i.eval(exp)).thenReturn(Result.of("result"))
+        val i: Interpreter = mockk()
+        val exp: Expression<String> = mockk()
+        every { i.eval(exp) } returns (Success("result"))
 
-        assertEquals("result", CoroutinesExpressionJob(i, exp).await().get())
+        assertTrue(CoroutinesExpressionJob(i, exp).await().exists { it == "result" })
     }
 
     @Test(expected = NoClassDefFoundError::class)
     fun `test mainThread eval with default context extension`() {
         CoroutinesExpressionJob.uiDispatcher = lazy { UI }
-        FunctionInterpreter.eval(mock<Expression<String>>().runOnMainThread(), mock())?.invoke()
+        FunctionInterpreter.eval(mockk<Expression<String>>().runOnMainThread(), mockk())?.invoke()
     }
 
     @Test
     fun `test expression async extension`() {
-        val exp: Expression<String> = mock()
-        val i: Interpreter = mock()
+        val exp: Expression<String> = mockk(relaxed = true)
+        val i: Interpreter = mockk(relaxed = true)
         FunctionInterpreter.eval(exp.async(), i)?.invoke()?.await()
-        verify(i).eval(exp)
+        verify { i.eval(exp) }
     }
 
     @Test
     fun `test expression main thread extension`() {
-        val exp: Expression<String> = mock()
-        val i: Interpreter = mock()
+        val exp: Expression<String> = mockk(relaxed = true)
+        val i: Interpreter = mockk(relaxed = true)
         FunctionInterpreter.eval(exp.runOnMainThread(), i)?.invoke()
         runBlocking(CoroutinesExpressionJob.uiDispatcher.value) { }
-        verify(i).eval(exp)
+        verify { i.eval(exp) }
     }
 }

@@ -1,88 +1,96 @@
-package bob.free
-
-import com.github.kittinunf.result.Result
-import com.nhaarman.mockito_kotlin.*
+import bob.free.*
+import io.mockk.*
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AlgebrasTest {
     @Test
     fun `test interpreters compose`() {
-        val partlyInterpreters = listOf(mock<PartlyInterpreter>(), mock())
+        val partlyInterpreters =
+            listOf(mockk<PartlyInterpreter>(relaxed = true), mockk(relaxed = true))
         val interpreter = ComposedInterpreter(partlyInterpreters)
-        clearInvocations(*partlyInterpreters.toTypedArray())
+        clearMocks(*partlyInterpreters.toTypedArray())
 
-        val exp: Expression<String> = mock()
-        whenever(partlyInterpreters[0].eval(exp, interpreter)).thenReturn({ "eval1" })
-        assertEquals("eval1", interpreter.eval(exp).get())
-        verifyZeroInteractions(partlyInterpreters[1])
+        val exp: Expression<String> = mockk(relaxed = true)
+        every { partlyInterpreters[0].eval(exp, interpreter) } returns { "eval1" }
+        assertTrue(interpreter.eval(exp).exists { it == "eval1" })
+        verify { partlyInterpreters[1] wasNot called }
 
-        clearInvocations(partlyInterpreters[0])
-        whenever(partlyInterpreters[0].eval(exp, interpreter)).thenReturn(null)
-        whenever(partlyInterpreters[1].eval(exp, interpreter)).thenReturn({ "eval2" })
-        assertEquals("eval2", interpreter.eval(exp).get())
-        verify(partlyInterpreters[0]).eval(exp, interpreter)
+        clearMocks(partlyInterpreters[0])
+        every { partlyInterpreters[0].eval(exp, interpreter) } returns null
+        every { partlyInterpreters[1].eval(exp, interpreter) } returns { "eval2" }
+        assertTrue(interpreter.eval(exp).exists { it == "eval2" })
+        verify { partlyInterpreters[0].eval(exp, interpreter) }
     }
 
     @Test
     fun `test interpreters compose order`() {
-        val i = mock<PartlyInterpreter>().also {
-            whenever(it.priority).thenReturn(1)
-            whenever(it.eval<String>(any(), any())).thenReturn { "1" }
+        val i = mockk<PartlyInterpreter>().also {
+            every { it.priority } returns 1
+            every { it.eval<String>(any(), any()) } returns { "1" }
         }
-        val i2 = mock<PartlyInterpreter>().also {
-            whenever(it.priority).thenReturn(2)
-            whenever(it.eval<String>(any(), any())).thenReturn { "2" }
+        val i2 = mockk<PartlyInterpreter>().also {
+            every { it.priority } returns 2
+            every { it.eval<String>(any(), any()) } returns { "2" }
         }
 
-        val exp: Expression<String> = mock()
-        assertEquals("1", ComposedInterpreter(listOf(i, i2)).eval(exp).get())
-        assertEquals("1", ComposedInterpreter(listOf(i2, i)).eval(exp).get())
+        val exp: Expression<String> = mockk()
+        assertTrue(ComposedInterpreter(listOf(i, i2)).eval(exp).exists { it == "1" })
+        assertTrue(ComposedInterpreter(listOf(i2, i)).eval(exp).exists { it == "1" })
     }
 
     @Test
     fun `test no interpreter found`() {
-        val logger: (ExpressionError) -> Unit = mock()
-        val exp: Expression<String> = mock()
-        assertEquals(Result.error(ExpressionError.NoInterpreterFound(exp)), ComposedInterpreter(emptyList(), logger).eval(exp))
-        verify(logger).invoke(ExpressionError.NoInterpreterFound(exp))
-        verifyNoMoreInteractions(logger)
+        val logger: (Throwable) -> Unit = mockk(relaxed = true)
+        val exp: Expression<String> = mockk(relaxed = true)
+        assertEquals(
+            Failure<String>(ExpressionError.NoInterpreterFound(exp)),
+            ComposedInterpreter(emptyList(), logger).eval(exp)
+        )
+        verifyAll {
+            logger.invoke(ExpressionError.NoInterpreterFound(exp))
+        }
     }
 
     @Test
     fun `test eval error`() {
-        val logger: (ExpressionError) -> Unit = mock()
-        val partlyInterpreter: PartlyInterpreter = mock()
-        val exp: Expression<String> = mock()
+        val logger: (Throwable) -> Unit = mockk(relaxed = true)
+        val partlyInterpreter: PartlyInterpreter = mockk(relaxed = true)
+        val exp: Expression<String> = mockk(relaxed = true)
         val interpreter = ComposedInterpreter(listOf(partlyInterpreter), logger)
         val exception = RuntimeException()
-        whenever(partlyInterpreter.eval(exp, interpreter)).thenThrow(exception)
+        every { partlyInterpreter.eval(exp, interpreter) } throws exception
 
-        assertEquals(Result.error(ExpressionError.EvalError(exp, exception)), interpreter.eval(exp))
-        verify(logger).invoke(ExpressionError.EvalError(exp, exception))
-        verifyNoMoreInteractions(logger)
+        assertEquals(
+            Failure<String>(ExpressionError.EvalError(exception)),
+            interpreter.eval(exp)
+        )
+        verifyAll { logger.invoke(exception) }
     }
 
     @Test
     fun `test invoke error`() {
-        val logger: (ExpressionError) -> Unit = mock()
-        val partlyInterpreter: PartlyInterpreter = mock()
-        val exp: Expression<String> = mock()
+        val logger: (Throwable) -> Unit = mockk(relaxed = true)
+        val partlyInterpreter: PartlyInterpreter = mockk(relaxed = true)
+        val exp: Expression<String> = mockk(relaxed = true)
         val interpreter = ComposedInterpreter(listOf(partlyInterpreter), logger)
         val exception = RuntimeException()
-        whenever(partlyInterpreter.eval(exp, interpreter)).thenReturn({ throw exception })
+        every { partlyInterpreter.eval(exp, interpreter) } returns { throw exception }
 
-        assertEquals(Result.error(ExpressionError.InvokeError(exp, exception)), interpreter.eval(exp))
-        verify(logger).invoke(ExpressionError.InvokeError(exp, exception))
-        verifyNoMoreInteractions(logger)
+        assertEquals(
+            Failure<String>(ExpressionError.InvokeError(exception)),
+            interpreter.eval(exp)
+        )
+        verifyAll { logger.invoke(exception) }
     }
 
     @Test
     fun `test expression eval`() {
-        val interpreter: Interpreter = mock()
-        val exp: Expression<String> = mock()
-        val result = Result.Companion.of("")
-        whenever(interpreter.eval(exp)).thenReturn(result)
+        val interpreter: Interpreter = mockk()
+        val exp: Expression<String> = mockk()
+        val result = Success("")
+        every { interpreter.eval(exp) } returns result
         assertEquals(result, exp.eval(interpreter))
     }
 }

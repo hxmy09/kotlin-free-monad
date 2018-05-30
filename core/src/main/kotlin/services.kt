@@ -1,7 +1,3 @@
-/**
- * @author a483334
- * @since 2/8/18
- */
 package bob.free
 
 /**

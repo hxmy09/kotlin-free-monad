@@ -1,13 +1,5 @@
 package bob.free
 
-import com.github.kittinunf.result.Result
-import com.github.kittinunf.result.flatMap
-import com.github.kittinunf.result.map
-
-/**
- * @author a483334
- * @since 2/5/18
- */
 class FunctionExpression<out O : Any>(internal val f: Interpreter.() -> O) : Expression<O>
 
 object FunctionInterpreter : PartlyInterpreter {
@@ -24,20 +16,24 @@ fun <O : Any> expr(f: Interpreter.() -> O) = FunctionExpression(f)
 
 fun <A : Any, B : Any> Expression<A>.map(f: (A) -> B): Expression<B> =
         let { a ->
-            expr { eval(a).map(f).get() }
+            expr {
+                eval(a).map(f).getOrElse { throw it }
+            }
         }
 
 fun <A : Any, B : Any> Expression<A>.flatMap(f: (A) -> Expression<B>): Expression<B> =
         let { a ->
-            expr { eval(a).flatMap { eval(f(it)) }.get() }
+            expr { eval(a).flatMap { eval(f(it)) }.getOrElse { throw it } }
         }
 
-fun <A : Any, B : Any> Expression<A>.mapResult(f: (Result<A, Exception>) -> B): Expression<B> =
+fun <A : Any, B : Any> Expression<A>.mapResult(f: (Result<A>) -> B): Expression<B> =
         let { a ->
             expr { f(eval(a)) }
         }
 
-fun <A : Any, B : Any> Expression<A>.flatMapResult(f: (Result<A, Exception>) -> Expression<B>): Expression<B> =
+fun <A : Any, B : Any> Expression<A>.flatMapResult(f: (Result<A>) -> Expression<B>): Expression<B> =
         let { a ->
-            expr { eval(f(eval(a))).get() }
+            expr { eval(f(eval(a))).getOrElse { throw it } }
         }
+
+val functionInterpreter = ComposedInterpreter(listOf(FunctionInterpreter))
