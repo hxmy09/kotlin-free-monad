@@ -35,10 +35,22 @@ class CoroutinesExpressionJob<out O : Any>(
     }
 }
 
-fun <O : Any> Expression<O>.async(): Expression<JobControl<O>> = let { exp ->
-    expr { CoroutinesExpressionJob(this, exp) }
+fun <O : Any> Expression<O>.async(parent: Job? = null): Expression<JobControl<O>> = let { exp ->
+    expr {
+        CoroutinesExpressionJob(
+            this,
+            exp,
+            if (parent != null) parent + DefaultDispatcher else DefaultDispatcher
+        )
+    }
 }
 
-fun <O : Any> Expression<O>.runOnMainThread(): Expression<JobControl<O>> = let { exp ->
-    expr { CoroutinesExpressionJob(this, exp, CoroutinesExpressionJob.uiDispatcher.value) }
-}
+fun <O : Any> Expression<O>.runOnMainThread(parent: Job? = null): Expression<JobControl<O>> =
+    let { exp ->
+        expr {
+            CoroutinesExpressionJob(
+                this,
+                exp,
+                CoroutinesExpressionJob.uiDispatcher.value.let { if (parent != null) parent + it else it })
+        }
+    }
